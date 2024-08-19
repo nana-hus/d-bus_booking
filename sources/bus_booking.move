@@ -15,12 +15,11 @@ module bus_booking::bus_booking{
     const Error_Invalid_Price: u64 = 6;
     const Error_Invalid_Seats: u64 = 7;
     const Error_BusNotListed: u64 = 8;
-    const Error_Not_Enrolled: u64 = 9;
     const Error_Not_owner: u64 = 0;
 
 
    // User struct definition
-    public struct User has key {
+    public struct User has key, store {
         id: UID,
         `for`: ID,
         user_name: String,
@@ -255,10 +254,9 @@ module bus_booking::bus_booking{
     ) {
         assert!(object::id(bus) == cap.`for`, Error_Not_owner);
         let value = bus.balance.value();
-        assert!(value >= amount, Error_Invalid_Amount);  // Ensure sufficient balance
         let remaining = take(&mut bus.balance, amount, ctx);  // Withdraw amount
-
         transfer::public_transfer(remaining, sender(ctx));  // Transfer withdrawn funds
+       
         event::emit(FundWithdrawal {  // Emit FundWithdrawal event
             amount: amount,
             recipient: sender(ctx),
