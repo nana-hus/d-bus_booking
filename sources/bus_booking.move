@@ -246,19 +246,6 @@ module bus_booking::bus_booking{
         }
     }
 
-    // Function to mark a bus as completed by a passenger
-    public fun complete_bus(
-        booked_seat: &BookedSeat,  // Reference to the booked seat
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        assert!(sender(ctx) == ctx.sender(), Error_Not_Enrolled);  // Ensure sender is booked passenger
-
-        event::emit(BusCompleted {  // Emit BusCompleted event
-            bus_id: booked_seat.bus_id,
-            passenger: ctx.sender(),
-        });
-    }
-
     // Function to update details of a bus
     public fun update_bus_details(
         cap: &BusCap,          // Admin Capability
