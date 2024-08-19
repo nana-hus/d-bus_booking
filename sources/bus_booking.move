@@ -1,5 +1,4 @@
 #[allow(unused_use,unused_variable,lint(self_transfer),unused_field)]
-
 module bus_booking::bus_booking{
     use sui::event;
     use sui::sui::SUI;
@@ -9,6 +8,7 @@ module bus_booking::bus_booking{
     use sui::balance::{Balance, zero, value as balance_value};
     use sui::tx_context::sender;
     use sui::table::{Self, Table};
+
     // Constants for error codes
     const Error_Invalid_Amount: u64 = 2;
     const Error_Insufficient_Payment: u64 = 4;
@@ -154,12 +154,15 @@ module bus_booking::bus_booking{
 
     // Function to register a new user
     public fun register_user(
-        self: &Bus,
+        self: &mut Bus,
         user_name: String,  // Username encoded as UTF-8 bytes
         user_type: u8,          // Type of user (e.g., passenger, driver)
         public_key: String, // Public key of the user
         ctx: &mut TxContext     // Transaction context
     ) : User{
+        // add sender to bus. 
+        self.passengers.add(ctx.sender(), true);
+        // create user object 
         User {  // Store user details
             id: new(ctx),
             `for`: object::id(self),
@@ -214,7 +217,7 @@ module bus_booking::bus_booking{
         payment_coin: &mut Coin<SUI>,  // Payment coin for booking
         ctx: &mut TxContext      // Transaction context
     ) {
-        assert!(!table::contains(&bus.passengers, ctx.sender()), Error_BusNotListed); // Ensure bus is listed
+        assert!(table::contains(&bus.passengers, ctx.sender()), Error_BusNotListed); // Ensure bus is listed
         assert!(bus.available_seats > 0, Error_Invalid_Seats);  // Ensure bus has available seats
         assert!(payment_coin.value() >= bus.price, Error_Insufficient_Payment);  // Ensure payment is sufficient
         let passenger = ctx.sender();
@@ -338,9 +341,6 @@ module bus_booking::bus_booking{
             rate: rate,
         });
     }
-
-    
-    
 
     // Function to complete a driving session
     public fun complete_driving_session(
