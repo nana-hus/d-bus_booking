@@ -1,5 +1,4 @@
 #[allow(unused_use,unused_variable,lint(self_transfer),unused_field)]
-
 module bus_booking::bus_booking{
     use sui::event;
     use sui::sui::SUI;
@@ -9,18 +8,18 @@ module bus_booking::bus_booking{
     use sui::balance::{Balance, zero, value as balance_value};
     use sui::tx_context::sender;
     use sui::table::{Self, Table};
+
     // Constants for error codes
     const Error_Invalid_Amount: u64 = 2;
     const Error_Insufficient_Payment: u64 = 4;
     const Error_Invalid_Price: u64 = 6;
     const Error_Invalid_Seats: u64 = 7;
     const Error_BusNotListed: u64 = 8;
-    const Error_Not_Enrolled: u64 = 9;
     const Error_Not_owner: u64 = 0;
 
 
    // User struct definition
-    public struct User has key {
+    public struct User has key, store {
         id: UID,
         `for`: ID,
         user_name: String,
@@ -57,27 +56,10 @@ module bus_booking::bus_booking{
     // DriverProfile struct definition
     public struct DriverProfile has key {
         id: UID,
+        bus: ID,
+        rates: Table<address, u64>,
         driver_name: String,
         routes: vector<String>,
-    }
-
-    // DrivingService struct definition
-    public struct DrivingService has key {
-        id: UID,
-        driver_id: u64,
-        route_id: u64,
-        rate: u64,
-        available: bool,
-    }
-
-    // DrivingSession struct definition
-    public struct DrivingSession has key {
-        id: UID,
-        driver_id: u64,
-        passenger: address,
-        session_id: u64,
-        completed: bool,
-        rating: u8,
     }
 
     // Events Definitions
@@ -154,12 +136,15 @@ module bus_booking::bus_booking{
 
     // Function to register a new user
     public fun register_user(
-        self: &Bus,
+        self: &mut Bus,
         user_name: String,  // Username encoded as UTF-8 bytes
         user_type: u8,          // Type of user (e.g., passenger, driver)
         public_key: String, // Public key of the user
         ctx: &mut TxContext     // Transaction context
     ) : User{
+        // add sender to bus. 
+        self.passengers.add(ctx.sender(), true);
+        // create user object 
         User {  // Store user details
             id: new(ctx),
             `for`: object::id(self),
@@ -214,7 +199,7 @@ module bus_booking::bus_booking{
         payment_coin: &mut Coin<SUI>,  // Payment coin for booking
         ctx: &mut TxContext      // Transaction context
     ) {
-        assert!(!table::contains(&bus.passengers, ctx.sender()), Error_BusNotListed); // Ensure bus is listed
+        assert!(table::contains(&bus.passengers, ctx.sender()), Error_BusNotListed); // Ensure bus is listed
         assert!(bus.available_seats > 0, Error_Invalid_Seats);  // Ensure bus has available seats
         assert!(payment_coin.value() >= bus.price, Error_Insufficient_Payment);  // Ensure payment is sufficient
         let passenger = ctx.sender();
@@ -243,19 +228,6 @@ module bus_booking::bus_booking{
         }
     }
 
-    // Function to mark a bus as completed by a passenger
-    public fun complete_bus(
-        booked_seat: &BookedSeat,  // Reference to the booked seat
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        assert!(sender(ctx) == ctx.sender(), Error_Not_Enrolled);  // Ensure sender is booked passenger
-
-        event::emit(BusCompleted {  // Emit BusCompleted event
-            bus_id: booked_seat.bus_id,
-            passenger: ctx.sender(),
-        });
-    }
-
     // Function to update details of a bus
     public fun update_bus_details(
         cap: &BusCap,          // Admin Capability
@@ -282,10 +254,9 @@ module bus_booking::bus_booking{
     ) {
         assert!(object::id(bus) == cap.`for`, Error_Not_owner);
         let value = bus.balance.value();
-        assert!(value >= amount, Error_Invalid_Amount);  // Ensure sufficient balance
         let remaining = take(&mut bus.balance, amount, ctx);  // Withdraw amount
-
         transfer::public_transfer(remaining, sender(ctx));  // Transfer withdrawn funds
+       
         event::emit(FundWithdrawal {  // Emit FundWithdrawal event
             amount: amount,
             recipient: sender(ctx),
@@ -294,6 +265,7 @@ module bus_booking::bus_booking{
 
     // Function to create a driver profile
     public fun create_driver_profile(
+        bus: ID,
         driver_name: String,  // Driver name encoded as UTF-8 bytes
         routes: vector<String>, // Routes available for the driver
         ctx: &mut TxContext,  // Transaction context
@@ -303,84 +275,12 @@ module bus_booking::bus_booking{
 
         let profile = DriverProfile {  // Create new driver profile object
             id: driver_uid,
+            bus,
+            rates: table::new(ctx),
             driver_name: driver_name,
             routes: routes,
         };
 
         transfer::share_object(profile);  // Store driver profile details
-        event::emit(DriverProfileCreated {  // Emit DriverProfileCreated event
-            driver_id: driver_id,
-            driver_name: driver_name,
-        });
-    }
-
-    // Function to offer a driving service
-    public fun offer_driving_service(
-        driver_id: u64, // Driver ID
-        route_id: u64,  // Route ID
-        rate: u64,  // Rate per session
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        let service_id = new(ctx);  // Generate unique ID for driving service
-
-        let service = DrivingService {  // Create new driving service object
-            id: service_id,
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-            available: true,
-        };
-
-        transfer::share_object(service);  // Store driving service details
-        event::emit(DrivingServiceOffered {  // Emit DrivingServiceOffered event
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-        });
-    }
-
-    
-    
-
-    // Function to complete a driving session
-    public fun complete_driving_session(
-        session: &mut DrivingSession,  // Reference to the driving session
-        rating: u8,  // Rating for the session
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        assert!(session.passenger == ctx.sender(), Error_Not_Enrolled);  // Ensure sender is the passenger
-        session.completed = true;  // Mark session as completed
-        session.rating = rating;  // Set rating for the session
-
-        event::emit(DrivingSessionCompleted {  // Emit DrivingSessionCompleted event
-            session_id: session.session_id,
-            driver_id: session.driver_id,
-            passenger: session.passenger,
-        });
-    }
-
-    // Function to update a driving service
-    public fun update_driving_service(
-        driver_id: u64, // Driver ID
-        route_id: u64,  // Route ID
-        rate: u64,  // Updated rate per session
-        available: bool,  // Updated availability status
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        let service = DrivingService {
-            id: new(ctx),
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-            available: available,
-        };
-
-        transfer::share_object(service);  // Store updated driving service details
-        event::emit(DrivingServiceUpdated {  // Emit DrivingServiceUpdated event
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-            available: available,
-        });
     }
 }
