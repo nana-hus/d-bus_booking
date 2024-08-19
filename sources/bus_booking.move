@@ -1,4 +1,4 @@
-#[allow(unused_use,unused_variable,lint(self_transfer),unused_field)]
+#[allow(unused_use,unused_variable,unused_const,lint(self_transfer),unused_field)]
 module bus_booking::bus_booking{
     use sui::event;
     use sui::sui::SUI;
