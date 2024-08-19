@@ -57,27 +57,10 @@ module bus_booking::bus_booking{
     // DriverProfile struct definition
     public struct DriverProfile has key {
         id: UID,
+        bus: ID,
+        rates: Table<address, u64>,
         driver_name: String,
         routes: vector<String>,
-    }
-
-    // DrivingService struct definition
-    public struct DrivingService has key {
-        id: UID,
-        driver_id: u64,
-        route_id: u64,
-        rate: u64,
-        available: bool,
-    }
-
-    // DrivingSession struct definition
-    public struct DrivingSession has key {
-        id: UID,
-        driver_id: u64,
-        passenger: address,
-        session_id: u64,
-        completed: bool,
-        rating: u8,
     }
 
     // Events Definitions
@@ -284,6 +267,7 @@ module bus_booking::bus_booking{
 
     // Function to create a driver profile
     public fun create_driver_profile(
+        bus: ID,
         driver_name: String,  // Driver name encoded as UTF-8 bytes
         routes: vector<String>, // Routes available for the driver
         ctx: &mut TxContext,  // Transaction context
@@ -293,81 +277,12 @@ module bus_booking::bus_booking{
 
         let profile = DriverProfile {  // Create new driver profile object
             id: driver_uid,
+            bus,
+            rates: table::new(ctx),
             driver_name: driver_name,
             routes: routes,
         };
 
         transfer::share_object(profile);  // Store driver profile details
-        event::emit(DriverProfileCreated {  // Emit DriverProfileCreated event
-            driver_id: driver_id,
-            driver_name: driver_name,
-        });
-    }
-
-    // Function to offer a driving service
-    public fun offer_driving_service(
-        driver_id: u64, // Driver ID
-        route_id: u64,  // Route ID
-        rate: u64,  // Rate per session
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        let service_id = new(ctx);  // Generate unique ID for driving service
-
-        let service = DrivingService {  // Create new driving service object
-            id: service_id,
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-            available: true,
-        };
-
-        transfer::share_object(service);  // Store driving service details
-        event::emit(DrivingServiceOffered {  // Emit DrivingServiceOffered event
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-        });
-    }
-
-    // Function to complete a driving session
-    public fun complete_driving_session(
-        session: &mut DrivingSession,  // Reference to the driving session
-        rating: u8,  // Rating for the session
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        assert!(session.passenger == ctx.sender(), Error_Not_Enrolled);  // Ensure sender is the passenger
-        session.completed = true;  // Mark session as completed
-        session.rating = rating;  // Set rating for the session
-
-        event::emit(DrivingSessionCompleted {  // Emit DrivingSessionCompleted event
-            session_id: session.session_id,
-            driver_id: session.driver_id,
-            passenger: session.passenger,
-        });
-    }
-
-    // Function to update a driving service
-    public fun update_driving_service(
-        driver_id: u64, // Driver ID
-        route_id: u64,  // Route ID
-        rate: u64,  // Updated rate per session
-        available: bool,  // Updated availability status
-        ctx: &mut TxContext  // Transaction context
-    ) {
-        let service = DrivingService {
-            id: new(ctx),
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-            available: available,
-        };
-
-        transfer::share_object(service);  // Store updated driving service details
-        event::emit(DrivingServiceUpdated {  // Emit DrivingServiceUpdated event
-            driver_id: driver_id,
-            route_id: route_id,
-            rate: rate,
-            available: available,
-        });
     }
 }
